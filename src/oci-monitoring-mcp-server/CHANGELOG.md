@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added subscribed-region discovery and an optional `region` parameter to Monitoring tools, allowing queries outside the configured region.
+
 ## 2.0.2
 
 ### Changed
