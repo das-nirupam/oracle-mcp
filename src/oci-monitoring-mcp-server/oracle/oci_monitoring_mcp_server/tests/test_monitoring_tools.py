@@ -248,7 +248,7 @@ class TestMonitoringTools:
             compartment_id="compartment1",
             region="eu-frankfurt-1",
         )
-        await server.list_alarms("compartment1", region="eu-frankfurt-1")
+        server.list_alarms("compartment1", region="eu-frankfurt-1")
 
         assert [call.args for call in mock_get_client.call_args_list] == [
             ("eu-frankfurt-1",),

@@ -160,7 +160,7 @@ def list_subscribed_regions(
 
 
 @mcp.tool(name="list_alarms", description="Lists all alarms in a given compartment")
-async def list_alarms(
+def list_alarms(
     compartment_id: Annotated[
         str,
         "The ID of the compartment containing the resources"
