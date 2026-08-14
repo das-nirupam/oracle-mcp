@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added subscribed-region discovery and optional region selection for Logging tools.
+
 ## 2.0.2
 
 ### Changed

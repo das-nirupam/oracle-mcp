@@ -16,6 +16,38 @@ from oracle.oci_logging_mcp_server.server import mcp
 
 
 class TestGetClient:
+    @patch("oracle.oci_logging_mcp_server.server.oci.identity.IdentityClient")
+    @patch("oracle.oci_logging_mcp_server.server.oci.config.from_file")
+    @patch("oracle.oci_logging_mcp_server.server._get_http_config_and_signer", return_value=(None, None))
+    def test_list_subscribed_regions_uses_profile_tenancy(
+        self, _mock_http_auth, mock_from_file, mock_identity_client
+    ):
+        mock_from_file.return_value = {"tenancy": "tenancy", "region": "us-ashburn-1"}
+        mock_identity_client.return_value.list_region_subscriptions.return_value = MagicMock(
+            data=[MagicMock(region_name="us-ashburn-1"), MagicMock(region_name="eu-frankfurt-1")]
+        )
+
+        assert server.list_subscribed_regions() == ["us-ashburn-1", "eu-frankfurt-1"]
+        mock_identity_client.return_value.list_region_subscriptions.assert_called_once_with(
+            tenancy_id="tenancy"
+        )
+
+    @patch("oracle.oci_logging_mcp_server.server.oci.auth.signers.TokenExchangeSigner", return_value="signer")
+    @patch("oracle.oci_logging_mcp_server.server.get_access_token")
+    def test_http_client_uses_requested_region(self, mock_get_access_token, mock_signer, monkeypatch):
+        mock_get_access_token.return_value = AccessToken(token="token", client_id="client", scopes=[], claims={})
+        monkeypatch.setenv("ORACLE_MCP_HOST", "127.0.0.1")
+        monkeypatch.setenv("ORACLE_MCP_PORT", "8888")
+        monkeypatch.setenv("IDCS_DOMAIN", "idcs.example.com")
+        monkeypatch.setenv("IDCS_CLIENT_ID", "client-id")
+        monkeypatch.setenv("IDCS_CLIENT_SECRET", "client-secret")
+
+        config, signer = server._get_http_config_and_signer("eu-frankfurt-1")
+
+        assert config["region"] == "eu-frankfurt-1"
+        assert signer == "signer"
+        assert mock_signer.call_args.kwargs["region"] == "eu-frankfurt-1"
+
     @patch("oracle.oci_logging_mcp_server.server.oci.logging.LoggingManagementClient")
     @patch("oracle.oci_logging_mcp_server.server.oci.auth.signers.SecurityTokenSigner")
     @patch("oracle.oci_logging_mcp_server.server.oci.signer.load_private_key_from_file")
@@ -90,6 +122,22 @@ class TestGetClient:
 
 
 class TestLoggingTools:
+    def test_management_tools_use_requested_region(self, monkeypatch):
+        requested_regions = []
+        client = MagicMock()
+        client.list_log_groups.return_value = MagicMock(data=[], has_next_page=False)
+        client.get_log_group.return_value = MagicMock(data=None)
+        client.list_logs.return_value = MagicMock(data=[], has_next_page=False)
+        client.get_log.return_value = MagicMock(data=None)
+        monkeypatch.setattr(server, "get_logging_client", lambda region: requested_regions.append(region) or client)
+
+        server.list_log_groups("compartment", region="eu-frankfurt-1", limit=None)
+        server.get_log_group("group", region="eu-frankfurt-1")
+        server.list_logs("group", region="eu-frankfurt-1", limit=None)
+        server.get_log("log", "group", region="eu-frankfurt-1")
+
+        assert requested_regions == ["eu-frankfurt-1"] * 4
+
     @pytest.mark.asyncio
     @patch("oracle.oci_logging_mcp_server.server.get_logging_client")
     async def test_list_log_groups(self, mock_get_client):
